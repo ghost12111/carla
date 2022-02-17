@@ -106,7 +106,7 @@ class PIDLongitudinalController():
     PIDLongitudinalController implements longitudinal control using a PID.
     """
 
-    def __init__(self, vehicle, K_P=1.0, K_I=0.0, K_D=0.0, dt=0.03):
+    def __init__(self, vehicle, K_P=1.0, K_I=0.0, K_D=0.0, dt=0.03, ie_windup_clip=np.inf):
         """
         Constructor method.
 
@@ -122,6 +122,8 @@ class PIDLongitudinalController():
         self._k_d = K_D
         self._dt = dt
         self._error_buffer = deque(maxlen=10)
+        self._ie = 0.
+        self._ie_clip = ie_windup_clip # ie_windup_clip
 
     def run_step(self, target_speed, debug=False):
         """
@@ -152,12 +154,11 @@ class PIDLongitudinalController():
 
         if len(self._error_buffer) >= 2:
             _de = (self._error_buffer[-1] - self._error_buffer[-2]) / self._dt
-            _ie = sum(self._error_buffer) * self._dt
         else:
             _de = 0.0
-            _ie = 0.0
+        self._ie = np.clip(self._ie + error * self._dt, -self._ie_clip, self._ie_clip)
 
-        return np.clip((self._k_p * error) + (self._k_d * _de) + (self._k_i * _ie), -1.0, 1.0)
+        return np.clip((self._k_p * error) + (self._k_d * _de) + (self._k_i * self._ie), -1.0, 1.0)
 
     def change_parameters(self, K_P, K_I, K_D, dt):
         """Changes the PID parameters"""
@@ -172,7 +173,7 @@ class PIDLateralController():
     PIDLateralController implements lateral control using a PID.
     """
 
-    def __init__(self, vehicle, offset=0, K_P=1.0, K_I=0.0, K_D=0.0, dt=0.03):
+    def __init__(self, vehicle, offset=0, K_P=1.0, K_I=0.0, K_D=0.0, dt=0.03, ie_windup_clip=np.inf):
         """
         Constructor method.
 
@@ -191,6 +192,8 @@ class PIDLateralController():
         self._dt = dt
         self._offset = offset
         self._e_buffer = deque(maxlen=10)
+        self._ie = 0.
+        self._ie_clip = ie_windup_clip
 
     def run_step(self, waypoint):
         """
@@ -243,12 +246,11 @@ class PIDLateralController():
         self._e_buffer.append(_dot)
         if len(self._e_buffer) >= 2:
             _de = (self._e_buffer[-1] - self._e_buffer[-2]) / self._dt
-            _ie = sum(self._e_buffer) * self._dt
         else:
             _de = 0.0
-            _ie = 0.0
+        self._ie = np.clip(self._ie+_dot*self._dt, -self._ie_clip, self._ie_clip)
 
-        return np.clip((self._k_p * _dot) + (self._k_d * _de) + (self._k_i * _ie), -1.0, 1.0)
+        return np.clip((self._k_p * _dot) + (self._k_d * _de) + (self._k_i * self._ie), -1.0, 1.0)
 
     def change_parameters(self, K_P, K_I, K_D, dt):
         """Changes the PID parameters"""
